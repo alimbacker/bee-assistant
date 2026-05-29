@@ -1,0 +1,20 @@
+# dependencies
+node_modules/
+**/node_modules/
+
+# build output
+web/.next/
+web/out/
+
+# database (auto-created on first run)
+server/bee.db
+server/bee.db-shm
+server/bee.db-wal
+
+# env
+**/.env
+**/.env.local
+
+# logs / os
+*.log
+.DS_Store

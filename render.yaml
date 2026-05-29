@@ -1,0 +1,27 @@
+# Render Blueprint — deploys the Bee Assistant backend (Express + SQLite).
+# In Render: New → Blueprint → connect your GitHub repo → it reads this file.
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: bee-assistant-api
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      # Persist the SQLite file on the mounted disk below
+      - key: DB_PATH
+        value: /var/data/bee.db
+      # Set this to your Vercel URL after the frontend is deployed
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: USE_OLLAMA
+        value: "false"
+    disk:
+      name: bee-data
+      mountPath: /var/data
+      sizeGB: 1

@@ -1,0 +1,15 @@
+{
+  "name": "bee-assistant",
+  "version": "1.0.0",
+  "description": "Bee Assistant — AllBee Solutions. Multilingual AI voice/chat/business assistant. Runs with no API keys.",
+  "private": true,
+  "scripts": {
+    "install:all": "cd server && npm install && cd ../web && npm install",
+    "dev": "concurrently -n server,web -c cyan,magenta \"npm --prefix server run dev\" \"npm --prefix web run dev\"",
+    "dev:server": "npm --prefix server run dev",
+    "dev:web": "npm --prefix web run dev"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  }
+}
