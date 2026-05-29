@@ -1,12 +1,11 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import BeeLogo from './BeeLogo';
 import { useUI } from './UIProvider';
 import { LANGS } from '@/lib/i18n';
 import { api } from '@/lib/api';
 import {
-  speechSupported, speak, stopSpeaking, listenOnce, listenForWake,
+  speechSupported, speak, primeSpeech, stopSpeaking, listenOnce, listenForWake,
 } from '@/lib/voice';
 
 export default function VoiceCore() {
@@ -18,9 +17,10 @@ export default function VoiceCore() {
   const [live, setLive] = useState('Say something…');
   const [status, setStatus] = useState('Listening…');
   const [messages, setMessages] = useState([
-    { role: 'user', text: 'Tap the orb or say "Hey Bee" to start. I can help with courses, jobs, and business inquiries — in 13+ languages.' },
+    { role: 'user', text: 'Tap the orb and speak, or turn on "Hey Bee" below. I can help with courses, jobs, and business inquiries — in 13+ languages.' },
   ]);
   const wakeStop = useRef(null);
+  const wakeOnRef = useRef(false);
   const langRef = useRef(lang);
   useEffect(() => { langRef.current = lang; }, [lang]);
 
@@ -29,24 +29,28 @@ export default function VoiceCore() {
   async function handleUtterance(text) {
     push('user', text);
     setStatus('Thinking…');
+    setLive('Thinking…');
     try {
       const r = await api.voice(text, langRef.current);
       push('bee', r.reply);
       setLive(r.reply);
       setStatus('Bee');
       speak(r.reply, langRef.current);
-      if (r.route) setTimeout(() => router.push('/' + (r.route === 'home' ? '' : r.route)), 900);
+      if (r.route) setTimeout(() => router.push('/' + (r.route === 'home' ? '' : r.route)), 1200);
     } catch {
-      const fallback = "I couldn't reach the server. Make sure the API is running on port 4000.";
-      push('bee', fallback); setLive(fallback); setStatus('Offline');
+      const fallback = 'Connecting to the assistant… if this is the first request it can take up to a minute to wake up. Please try again in a moment.';
+      push('bee', fallback); setLive(fallback); setStatus('Waking up');
     }
-    setTimeout(() => setOverlay(false), 2600);
+    setTimeout(() => setOverlay(false), 3000);
   }
 
+  // Listen for one command immediately (orb tap / FAB). Primes TTS on the gesture.
   function startCommand() {
+    primeSpeech(); // unlock audio while we still have the user gesture
     if (!speechSupported()) {
       setOverlay(true); setStatus('Not supported');
-      setLive('Voice input needs Chrome or Edge. You can still tap the cards to talk to Bee.');
+      setLive('Voice needs Chrome or Edge. You can still tap the cards to talk to Bee.');
+      setTimeout(() => setOverlay(false), 3500);
       return;
     }
     stopWake();
@@ -54,48 +58,49 @@ export default function VoiceCore() {
     listenOnce(langRef.current, {
       onInterim: (t) => setLive(t || 'Listening…'),
       onError: (e) => {
-        setStatus(e.error === 'not-allowed' ? 'Mic blocked' : 'Error');
+        setStatus(e.error === 'not-allowed' ? 'Mic blocked' : 'Try again');
         setLive(e.error === 'not-allowed'
-          ? 'Microphone permission denied. Enable it to talk to Bee.'
-          : "Didn't catch that. Tap the orb to retry.");
+          ? 'Microphone permission is blocked. Click the mic/lock icon in the address bar, allow the mic, and reload.'
+          : "Didn't catch that — tap the orb and speak again.");
         setListening(false);
+        setTimeout(() => setOverlay(false), 3500);
       },
       onEnd: (finalText) => {
         setListening(false);
         if (finalText) handleUtterance(finalText);
-        else setTimeout(() => setOverlay(false), 700);
+        else { setLive('No speech detected — tap the orb and try again.'); setTimeout(() => setOverlay(false), 1800); }
       },
     });
   }
 
-  function startWake() {
+  // Optional always-on "Hey Bee" wake word.
+  function enableWake() {
+    primeSpeech();
     if (!speechSupported()) { startCommand(); return; }
-    setWakeOn(true); setListening(true);
+    setWakeOn(true); wakeOnRef.current = true; setListening(true);
     showToast('Always-listening on — say "Hey Bee"');
-    wakeStop.current = listenForWake(langRef.current, (rest) => {
-      showToast('Wake word detected');
-      setListening(false);
-      if (rest && rest.length > 3) {
-        setOverlay(true); setLive(rest); handleUtterance(rest);
-      } else {
-        startCommand();
-      }
-      // resume wake after a short delay if still enabled
-      setTimeout(() => { if (wakeOn) startWake(); }, 3500);
-    }, () => { setWakeOn(false); setListening(false); showToast('Mic permission needed'); });
+    const loop = () => {
+      wakeStop.current = listenForWake(langRef.current, (rest) => {
+        showToast('Wake word detected');
+        setListening(false);
+        if (rest && rest.length > 3) { setOverlay(true); setLive(rest); handleUtterance(rest); }
+        else startCommand();
+        setTimeout(() => { if (wakeOnRef.current) loop(); }, 4000);
+      }, () => { setWakeOn(false); wakeOnRef.current = false; setListening(false); showToast('Mic permission needed'); });
+    };
+    loop();
+  }
+
+  function disableWake() {
+    wakeOnRef.current = false; setWakeOn(false); setListening(false);
+    stopWake(); showToast('Always-listening off');
   }
 
   function stopWake() {
     if (wakeStop.current) { wakeStop.current(); wakeStop.current = null; }
   }
 
-  function toggleOrb() {
-    if (!speechSupported()) { startCommand(); return; }
-    if (wakeOn) { stopWake(); setWakeOn(false); setListening(false); showToast('Listening stopped'); }
-    else startWake();
-  }
-
-  useEffect(() => () => { stopWake(); stopSpeaking(); }, []);
+  useEffect(() => () => { wakeOnRef.current = false; stopWake(); stopSpeaking(); }, []);
 
   return (
     <>
@@ -112,16 +117,33 @@ export default function VoiceCore() {
       <div className="voice-core">
         <div className="halo"><div /></div>
         <div className="wake-label">
-          <p>{wakeOn ? 'Listening for' : 'Tap orb to start'}</p>
-          <h2>&quot;Hey Bee…&quot;</h2>
+          <p>{listening ? 'Listening…' : 'Tap to talk'}</p>
+          <h2>{wakeOn ? '"Hey Bee…"' : 'Ask me anything'}</h2>
         </div>
-        <div className={'orb' + (listening ? ' listening' : '')} onClick={toggleOrb}>
+        <div className={'orb' + (listening ? ' listening' : '')} onClick={startCommand} title="Tap and speak">
           <div className="pglow" />
           <span className="material-symbols-outlined ico fill">
             {listening ? 'graphic_eq' : 'mic'}
           </span>
           <div className="ring r1" /><div className="ring r2" />
         </div>
+
+        {/* optional wake-word toggle */}
+        <button
+          onClick={wakeOn ? disableWake : enableWake}
+          style={{
+            background: wakeOn ? 'rgba(0,184,196,.12)' : 'transparent',
+            border: '1px solid ' + (wakeOn ? 'var(--primary)' : 'var(--outline)'),
+            color: wakeOn ? 'var(--primary)' : 'var(--on-surface-variant)',
+            borderRadius: 9999, padding: '8px 16px', cursor: 'pointer',
+            fontFamily: 'Geist', fontWeight: 500, fontSize: 13, marginTop: -22, marginBottom: 8,
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+          }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+            {wakeOn ? 'hearing' : 'hearing_disabled'}
+          </span>
+          {wakeOn ? 'Listening for "Hey Bee" — tap to stop' : 'Enable "Hey Bee" wake word'}
+        </button>
       </div>
 
       {/* transcript */}
@@ -129,7 +151,9 @@ export default function VoiceCore() {
         {messages.map((m, i) => (
           <div key={i} className={'msg ' + m.role}>
             <div className="bubble-ico">
-              {m.role === 'bee' ? <BeeLogo size={18} /> : <span className="material-symbols-outlined">person</span>}
+              {m.role === 'bee'
+                ? <img src="/allbee-icon.png" alt="Bee" />
+                : <span className="material-symbols-outlined">person</span>}
             </div>
             <div>
               <p className="role">{m.role === 'bee' ? 'Bee Assistant' : 'You'}</p>
@@ -141,7 +165,7 @@ export default function VoiceCore() {
 
       {/* floating mic FAB */}
       <button className="fab" onClick={startCommand} title="Talk to Bee">
-        <span className="material-symbols-outlined">{listening || wakeOn ? 'graphic_eq' : 'mic'}</span>
+        <span className="material-symbols-outlined">{listening ? 'graphic_eq' : 'mic'}</span>
       </button>
 
       {/* listening overlay */}

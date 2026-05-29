@@ -24,6 +24,7 @@ app.use(cors({
 }));
 
 app.use(express.json({ limit: '256kb' }));
+app.use(express.urlencoded({ extended: false })); // telephony webhooks (Twilio etc.) post form-encoded
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'bee-assistant' }));
 app.use('/api/voice', voiceRouter);

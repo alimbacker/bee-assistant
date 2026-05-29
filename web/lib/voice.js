@@ -8,7 +8,55 @@ const synth = typeof window !== 'undefined' ? window.speechSynthesis : null;
 
 export const speechSupported = () => !!SR;
 
+// Call this inside a user-gesture handler (click/tap) to unlock speech synthesis.
+// Many browsers block speechSynthesis.speak() until it's been triggered by a gesture;
+// speaking a tiny silent utterance here unlocks it for the later reply.
+export function primeSpeech() {
+  if (!synth) return;
+  try {
+    synth.resume();
+    synth.getVoices(); // warm the voice list
+    const u = new SpeechSynthesisUtterance(' ');
+    u.volume = 0;
+    synth.speak(u);
+  } catch {}
+}
+
 export const WAKE_WORDS = ['hey bee', 'hello bee', 'hi bee', 'bee assistant', 'okay bee', 'ok bee'];
+
+// ----- Voice selection (which TTS voice speaks) -----
+const VOICE_KEY = 'bee_voice_name';
+
+export function getVoiceList() {
+  if (!synth) return [];
+  return synth.getVoices();
+}
+
+// Voices available for a given language code (falls back to all if none match).
+export function voicesForLang(langCode) {
+  const all = getVoiceList();
+  const matches = all.filter((v) => v.lang && v.lang.toLowerCase().startsWith(langCode.toLowerCase()));
+  return matches.length ? matches : all;
+}
+
+export function getSavedVoiceName() {
+  try { return localStorage.getItem(VOICE_KEY) || ''; } catch { return ''; }
+}
+
+export function setSavedVoiceName(name) {
+  try { name ? localStorage.setItem(VOICE_KEY, name) : localStorage.removeItem(VOICE_KEY); } catch {}
+}
+
+function pickVoice(langCode) {
+  const all = getVoiceList();
+  const saved = getSavedVoiceName();
+  if (saved) {
+    const v = all.find((x) => x.name === saved);
+    if (v) return v;
+  }
+  return all.find((v) => v.lang === bcpFor(langCode)) ||
+         all.find((v) => v.lang && v.lang.startsWith(langCode)) || null;
+}
 
 export function speak(text, langCode = 'en') {
   if (!synth) return;
@@ -17,10 +65,7 @@ export function speak(text, langCode = 'en') {
     const u = new SpeechSynthesisUtterance(text);
     u.lang = bcpFor(langCode);
     u.rate = 1.02;
-    const voices = synth.getVoices();
-    const v =
-      voices.find((v) => v.lang === u.lang) ||
-      voices.find((v) => v.lang && v.lang.startsWith(langCode));
+    const v = pickVoice(langCode);
     if (v) u.voice = v;
     synth.speak(u);
   } catch {}

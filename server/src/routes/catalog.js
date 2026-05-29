@@ -9,6 +9,9 @@ analyticsRouter.get('/', (_req, res) => {
   const totalLeads = db.prepare('SELECT COUNT(*) AS n FROM leads').get().n;
   const converted = db.prepare("SELECT COUNT(*) AS n FROM leads WHERE status='converted'").get().n;
   const conversations = db.prepare('SELECT COUNT(*) AS n FROM conversations').get().n;
+  const calls = db.prepare("SELECT COUNT(*) AS n FROM leads WHERE source='call'").get().n;
+  const positive = db.prepare("SELECT COUNT(*) AS n FROM conversations WHERE sentiment='positive'").get().n;
+  const langsActive = db.prepare('SELECT COUNT(DISTINCT language) AS n FROM conversations').get().n;
 
   const byLang = db.prepare(
     'SELECT language, COUNT(*) AS n FROM conversations GROUP BY language ORDER BY n DESC'
@@ -28,12 +31,11 @@ analyticsRouter.get('/', (_req, res) => {
       leads: totalLeads,
       conversions: converted,
       conversations,
-      // illustrative ops metrics
-      calls_handled: 14209,
-      call_success_rate: 0.984,
-      ai_credits_used: 82500,
-      active_voice_sessions: 41,
-      languages_supported: 100,
+      calls_handled: calls,
+      // satisfaction = share of positive conversations (real, from sentiment)
+      satisfaction: conversations ? positive / conversations : 0,
+      languages_active: langsActive,
+      languages_supported: 13,
     },
     languageDistribution: byLang,
     sentiment: bySentiment,

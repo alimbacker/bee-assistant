@@ -50,20 +50,5 @@ if (count === 0) {
   ]);
 }
 
-// ---- seed a couple of demo leads/conversations for the dashboard ----
-if (db.prepare('SELECT COUNT(*) AS n FROM leads').get().n === 0) {
-  const l = db.prepare(
-    'INSERT INTO leads (id,name,mobile,email,business_type,requirement,source,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)'
-  );
-  l.run(uid(), 'Sarah Jenkins', '+1 555 0142', 'sarah@example.com', 'Consulting', 'Tech consultation', 'web', 'new', Date.now());
-  l.run(uid(), 'Marcus Thorne', '+49 152 0099', 'marcus@example.com', 'Startup', 'Mobile app demo', 'voice', 'contacted', Date.now() - 86400000);
-  l.run(uid(), 'Elena Rodriguez', '+34 600 1234', 'elena@example.com', 'Retail', 'Premium upgrade', 'call', 'converted', Date.now() - 172800000);
-}
-if (db.prepare('SELECT COUNT(*) AS n FROM conversations').get().n === 0) {
-  const c = db.prepare(
-    'INSERT INTO conversations (id,user_id,transcript,summary,intent,sentiment,language,created_at) VALUES (?,?,?,?,?,?,?,?)'
-  );
-  c.run(uid(), null, '[]', 'Asked about pricing tiers', 'business', 'positive', 'en', Date.now());
-  c.run(uid(), null, '[]', 'API integration question', 'business', 'neutral', 'en', Date.now() - 3600000);
-  c.run(uid(), null, '[]', 'Issue resolved, thanked Bee', 'thanks', 'positive', 'en', Date.now() - 7200000);
-}
+// No demo leads or conversations are seeded — the dashboard starts empty and
+// fills with real activity as users talk to Bee and submit inquiries.
